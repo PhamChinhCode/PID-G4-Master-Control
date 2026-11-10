@@ -1,0 +1,15 @@
+# KiCad temporary / local files
+*.lck
+~*.lck
+*-backups/
+_autosave-*
+*.bak
+*.kicad_prl
+fp-info-cache
+*-cache.lib
+*.kicad_sch-bak
+*.kicad_pcb-bak
+
+# Fabrication outputs (uncomment if you don't want them tracked)
+# gerber/
+# *.zip
