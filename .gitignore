@@ -13,3 +13,6 @@ fp-info-cache
 # Fabrication outputs (uncomment if you don't want them tracked)
 # gerber/
 # *.zip
+
+# KiCad 10 local history (nested git repo)
+.history/

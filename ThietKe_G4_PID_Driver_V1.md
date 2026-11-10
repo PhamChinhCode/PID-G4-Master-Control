@@ -2,7 +2,7 @@
 
 Nov 10, 2026 · @pham chinh · Trạng thái: **bản nháp thiết kế (giai đoạn 0 – chốt spec)**
 
-Tài liệu gốc: [ThietKe_F1_PID_Driver_V2.md](ThietKe_F1_PID_Driver_V2.md). Board này **giữ nguyên toàn bộ tầng công suất và mạch an toàn SD/ENA của F1_PID_Driver_V2** (cầu H 4 FET + 2× EG2104, 12VG boost, buck MP2459, chống ngược cực Q5, TVS, tản nhiệt xuống vỏ), chỉ thay phần MCU bằng **STM32G431CBT6** và tận dụng ngoại vi tích hợp để bỏ IC ngoài.
+Tài liệu gốc: [ThietKe_F1_PID_Driver_V2.md](ThietKe_F1_PID_Driver_V2.md). Board này **giữ nguyên toàn bộ tầng công suất và mạch an toàn SD/ENA của F1_PID_Driver_V2** (cầu H 4 FET + 2× gate driver chuẩn IR2104 — nay là IRS2104S, 12VG boost, buck 5 V, chống ngược cực Q5, TVS, tản nhiệt xuống vỏ), chỉ thay phần MCU bằng **STM32G431CBT6** và tận dụng ngoại vi tích hợp để bỏ IC ngoài.
 
 Những gì **không nhắc lại** ở đây thì giữ như F1 V2 (mục 6.2–6.5 tính toán gate/bootstrap/nhiệt/đồng/TVS, mục 4.5 điều kiện USB không cách ly, mục 9 quy tắc layout công suất).
 
@@ -10,6 +10,9 @@ Lịch sử quyết định:
 - Nov 10, 2026: tạo từ F1_PID_Driver_V2. **MCU STM32G431CBT6**; **USB native** (bỏ CH340C, nạp bằng ROM DFU); **đo dòng bằng OPAMP nội ở chế độ PGA** (bỏ INA181); **cắt dòng bằng COMP nội + DAC3 nội → TIM1_BKIN bên trong chip** (bỏ TLV7011 và mạch PWM + RC tạo VREF_OC).
 - Nov 10, 2026: **bỏ FDCAN**. Trên LQFP48, FDCAN1 chỉ ra PA11/PA12 (USB) hoặc PB8/PB9 (PB8 = BOOT0) → giữ CAN buộc phải khóa chân BOOT0 bằng option byte và mất đường vào DFU bằng nút. Bỏ CAN thì: **PB8 trở lại làm BOOT0 + nút**, option byte để mặc định, và **bỏ luôn thạch anh** (chỉ CAN mới cần; USB dùng HSI48 + CRS, hệ thống chạy HSI16 → PLL 170 MHz).
 - Nov 10, 2026: gom mã linh kiện **33 → 29 mã**, ~170 → **~159 linh kiện** (Phụ lục A).
+- Nov 10, 2026: **bỏ mã tụ 1 µF (M08), gộp vào 10 µF/25 V 0805 (M09)**: bootstrap mỗi nửa cầu 2 × 1 µF → **1 × 10 µF** (~3–4 µF hiệu dụng ở 12 V do DC bias, ≥ 0,7 µF yêu cầu; R 10 Ω giữ dòng nạp lần đầu ~1,2 A); VCC EG2104, vào/ra LDO, VDDA, VREF+ → 10 µF. Bỏ C12, C14. Thêm R74 100 kΩ (EN MP2459 lên VIN) vào BOM. → **28 mã, ~158 linh kiện**.
+- Nov 10, 2026: **buck 5 V đổi MP2459 → TI LMR51606XDBVR** (LCSC C21260865): 4–65 V làm việc, **70 V tuyệt đối** (MP2459: 55 V), đồng bộ 0,6 A, SOT-23-6, **cùng thứ tự chân** (1 CB, 2 GND, 3 FB, 4 EN, 5 VIN, 6 SW), V_FB 0,8 V → giữ chia áp FB (12 k / 2 k → 5,6 V). Lý do: MP2459 khó mua ổn định ở LCSC. Đồng bộ nên **bỏ D10** (diode bắt); EN được phép nối thẳng VIN (≤ VIN + 0,3 V) nên **bỏ R74**. Đã xét và loại TPS54202 (28 V làm việc / 30 V tuyệt đối < gai 42 V) và AP64060 (40 V). Dự phòng: SCT2601TVBR (60 V, không đồng bộ, cần lại D10 và tính lại FB vì V_FB ~0,765 V). Cần kiểm datasheet: hậu tố X/Y (tần số 400 kHz / 1,1 MHz, PFM/FPWM) và cuộn 22 µH phù hợp. → **28 mã, ~156 linh kiện**.
+- Nov 10, 2026: **MOSFET Q1–Q5: TPH1R306PL → Infineon BSC014N06NS** (LCSC C113391): 60 V, **R_DS(on) max 1,45 mΩ @10 V**, gói PG-TDSON-8 trùng footprint `TDSON-8-1`, phổ biến và rẻ hơn ở LCSC. Dự phòng: BSC016N06NS (kiểm R_DS max ≤ 1,6 mΩ); HYG019N06LS1C2 (~1,9 mΩ, rẻ nhất, phải hạ định mức ~13–14 A). **Gate driver U1/U2: EG2104S → Infineon IRS2104STRPBF**: cùng chân IR2104, **V_IH IN/SD = 2,5 V min** (Infineon hạ từ 3,0 V xuống để tương thích logic 3,3 V) — đã xác nhận, trong khi V_IH của EG2104 không tìm được nguồn xác nhận. Dòng ra ~130/270 mA → chuyển mạch kiểu IR2104 như đã tính ở mục 6.3 của F1 V2. Dự phòng: onsemi NCP5104DR2G (V_IH 2,3 V min, kiểm thứ tự chân); EG2104S chỉ dùng lại nếu datasheet EG Micro ghi V_IH ≤ 2,5 V. MCU giữ STM32G431CBT6 (LCSC C529355 tồn kho lớn).
 
 ---
 
@@ -77,12 +80,12 @@ Ngoài phạm vi: CAN, nhiều trục, BLDC/step, cách ly.
  ┌──────────────── VÙNG CÔNG SUẤT (như F1 V2) ──────┐  ┌──────────────── VÙNG LOGIC ─────────────────┐
  │ pad VM+ ─┬─ TVS SMCJ26A                           │  │ USB-C ─ SRV05-4 ─ PA11/PA12 (USB FS native)  │
  │          ├─ 3× 220µF/50V + 4× 4,7µF/50V           │  │   CDC: giao thức JSON / GUI Web Serial       │
- │          ├─ nửa cầu A: Q1/Q2 ◄─ EG2104 #A ◄─ IN_A ┼──┤◄─ PA8  TIM1_CH1                             │
- │          ├─ nửa cầu B: Q3/Q4 ◄─ EG2104 #B ◄─ IN_B ┼──┤◄─ PA9  TIM1_CH2                             │
+ │          ├─ nửa cầu A: Q1/Q2 ◄─ IRS2104 A ◄─ IN_A ┼──┤◄─ PA8  TIM1_CH1                             │
+ │          ├─ nửa cầu B: Q3/Q4 ◄─ IRS2104 B ◄─ IN_B ┼──┤◄─ PA9  TIM1_CH2                             │
  │          │       └── SD (cả hai) ◄──────────── SD ┼──┤◄─ pad ENA qua 10 kΩ                         │
  │          │                                        │  │     Q8 AO3400 kéo SD = 0 ◄─ nDIS (PB14)     │
  │          │   M+ = SH_A, M− = SH_B ──► pad M+/M−   │  │     ENA đọc lại → PB15                      │
- │          └─ Buck MP2459 → 5,67V ─[SS36]─ +5V ─────┼──┤ +5V ─ LDO ─ 3V3 ─ MCU                        │
+ │          └─ Buck LMR51606 → 5,6V ─[SS36]─ +5V ────┼──┤ +5V ─ LDO ─ 3V3 ─ MCU                        │
  │             +5V ─ boost MT3608 → +12VG (gate)     │  │ +5V ─ ferrite ─ encoder                      │
  │                                                   │  │                                              │
  │ shunt 2 mΩ ─┬ Kelvin+ ─ 1kΩ ─┬───────────────────┼──► PB0  OPAMP3_VINP ┐ PGA ×16                   │
@@ -105,7 +108,7 @@ Ngoài phạm vi: CAN, nhiều trục, BLDC/step, cách ly.
 | Quyết định | Chọn | Lý do / phương án bị loại |
 | --- | --- | --- |
 | MCU | **STM32G431CBT6** LQFP48 | LQFP dễ hàn/sửa hơn UFQFPN48; 128 KB đủ cho firmware F1 + USB CDC |
-| Gate driver | **2× EG2104S**, như F1 V2 | Điều kiện V_IH IN/SD ≤ 2,5 V vẫn bắt buộc |
+| Gate driver | **2× IRS2104STRPBF** (cùng chân IR2104/EG2104 của F1 V2) | V_IH IN/SD = 2,5 V min đã xác nhận; dự phòng NCP5104 (2,3 V) |
 | Điều khiển cầu H | **TIM1_CH1 → IN_A, TIM1_CH2 → IN_B**, hai kênh độc lập | Có chân vì USB native giải phóng PA9. Bỏ thủ thuật CH1/CH1N + CCER của F1 |
 | Đo dòng | **OPAMP3 PGA ×16** + offset dương từ VDDA + tham chiếu Kelvin qua VINM0 | Bỏ INA181. Đo được cả dòng âm (hãm) đến ~−13 A |
 | Cắt dòng | **COMP1** (INP = ngõ ra OPAMP3 trên PB1, INM = DAC3_CH1) → **TIM1 break nội**, AOE = 1; **blanking** theo TIM1_OC5 | Trễ < 1 µs (F1: 2–3 µs); không cần chân BKIN ngoài |
@@ -120,7 +123,7 @@ Ngoài phạm vi: CAN, nhiều trục, BLDC/step, cách ly.
 
 ### 4.3 Điều khiển cầu H bằng TIM1_CH1 + TIM1_CH2
 
-EG2104: IN = 1 → HO bật; IN = 0 → LO bật; SD = 0 → cả hai tắt. Dead-time nằm trong từng EG2104 → **TIM1 DTG = 0**, không tổ hợp IN nào gây shoot-through.
+IRS2104: IN = 1 → HO bật; IN = 0 → LO bật; SD = 0 → cả hai tắt. Dead-time nằm trong từng IRS2104 → **TIM1 DTG = 0**, không tổ hợp IN nào gây shoot-through.
 
 Cấu hình: PWM mode 1, center-aligned, ARR = 170 MHz / (2 × 20 kHz) = **4250**, preload CCR bật. **OSSR = OSSI = 1, OIS1 = OIS2 = 0** → khi break hoặc MOE = 0, PA8/PA9 bị lái mức 0.
 
@@ -189,7 +192,7 @@ Trong bootloader PA8/PA9 Hi-Z → kéo xuống 10 kΩ, nDIS Hi-Z → Q8 dẫn �
 
 | Khối | Linh kiện | Ghi chú thiết kế |
 | --- | --- | --- |
-| MCU | **STM32G431CBT6** (LQFP48) | 100 nF mỗi chân VDD + 10 µF bulk 3V3 gần MCU; **VDDA** qua ferrite + 1 µF + 100 nF; **VREF+** nối VDDA + 1 µF + 100 nF (dùng VDDA làm tham chiếu ADC/DAC → tỉ lệ thuận với offset từ VDDA); **VBAT → 3V3 + 100 nF**; **PB8-BOOT0 → 10 kΩ GND + nút lên 3V3 qua 1 kΩ**; NRST (PG10) 100 nF + nút. Không còn BOOT1 |
+| MCU | **STM32G431CBT6** (LQFP48) | 100 nF mỗi chân VDD + 10 µF bulk 3V3 gần MCU; **VDDA** qua ferrite + 10 µF + 100 nF; **VREF+** nối VDDA + 10 µF + 100 nF (dùng VDDA làm tham chiếu ADC/DAC → tỉ lệ thuận với offset từ VDDA); **VBAT → 3V3 + 100 nF**; **PB8-BOOT0 → 10 kΩ GND + nút lên 3V3 qua 1 kΩ**; NRST (PG10) 100 nF + nút. Không còn BOOT1 |
 | HSE | **Không lắp.** Footprint thạch anh 3225 + 2 tụ 0603 trên PF0/PF1 để **DNP** | Không tính vào BOM |
 | Đo dòng | Shunt 2 mΩ 2512 3 W (như F1) + R30 1 kΩ + C25 100 pF + R69 100 kΩ từ VDDA | Dùng mã sẵn có, không thêm mã |
 | USB | USB-C 16P + CC 2 × (10 k ‖ 10 k) + SRV05-4 + ferrite VBUS + chia áp VBUS 10 k / 10 k → PC13 | Không còn CH340C |
@@ -218,7 +221,7 @@ Tổng ~3,5 W; với đường tản nhiệt xuống vỏ nhôm Tj FET nóng nh�
 
 ### 6.4 Nguồn logic
 
-- Tải 5 V: G431 @170 MHz + ngoại vi analog ~40–50 mA (qua LDO) + encoder ≤ 50 mA + boost 12VG ~25 mA + LED/logic ~10 mA → **~130 mA**. MP2459 0,5 A ✔.
+- Tải 5 V: G431 @170 MHz + ngoại vi analog ~40–50 mA (qua LDO) + encoder ≤ 50 mA + boost 12VG ~25 mA + LED/logic ~10 mA → **~130 mA**. LMR51606 0,6 A ✔.
 - Chỉ cắm USB (không pin): VBUS ≤ 500 mA; không quay động cơ → đủ.
 - LDO 3,3 V tải ~60 mA: AP2112K ✔, tổn hao ~0,12 W.
 
@@ -237,10 +240,10 @@ Thay đổi: đo VM chuyển sang **PA4**, NTC **PA3**, AIN **PA2**; chia áp VM
 - [ ] **Trạng thái an toàn khi reset / bootloader**: gate Q8 kéo lên 3V3; SD kéo xuống 100 kΩ; PA8 và PA9 kéo xuống 10 kΩ; nút ENA kéo xuống 10 kΩ → 4 FET tắt (giữ nguyên F1 V2 mục 7).
 - [ ] **PB8-BOOT0**: R 10 kΩ xuống GND + nút lên 3V3 qua 1 kΩ, **không** nối chức năng nào khác (đặc biệt không pull-up I2C).
 - [ ] **PB4 / PB6**: không gán tín hiệu mà R kéo xuống 5,1 kΩ lúc khởi động gây hại (PB4 = STEP, PB6 = LED).
-- [ ] PA8 → IN_A, **PA9** → IN_B nối thẳng; kiểm V_IH ≤ 2,5 V của EG2104.
+- [ ] PA8 → IN_A, **PA9** → IN_B nối thẳng; IRS2104S có V_IH = 2,5 V min (nếu thay bằng mã khác phải kiểm lại).
 - [ ] Kelvin shunt: shunt+ → R30 1 kΩ → PB0; R69 100 kΩ từ **VDDA** (sau ferrite) → PB0; C25 100 pF PB0 → GND sát chân; shunt− → **PB2 trực tiếp**.
 - [ ] PB1 (OPAMP3_VOUT) để pad test, **không** nối linh kiện nào khác.
-- [ ] VREF+ nối VDDA, có 1 µF + 100 nF riêng; VDDA qua ferrite.
+- [ ] VREF+ nối VDDA, có 10 µF + 100 nF riêng; VDDA qua ferrite.
 - [ ] Footprint thạch anh + 2 tụ trên PF0/PF1 đánh dấu **DNP**.
 - [ ] USB: CC mỗi chân 5 kΩ xuống GND; **không** R pull-up ngoài trên D+; VBUS chia áp → PC13; SRV05-4 VDD → VBUS.
 - [ ] **Mọi tín hiệu ngoài 3,3–5 V chỉ vào chân FT ở chế độ số** (mục 8, đối chiếu datasheet). Không tín hiệu ngoài nào vào PA0–PA7, PB0–PB2.
@@ -292,9 +295,9 @@ Stackup, bố trí vùng công suất và quy tắc 1–10 **như F1 V2 mục 9*
 
 ```
  ┌○───────────────────────────────── 62 mm ────────────────────────────────○┐
- │ [VM+][VM−]  TVS  [C][C][C]bulk   EG2104A ─ Q1 Q2 ─ [M+]                  │  ← mép công suất
+ │ [VM+][VM−]  TVS  [C][C][C]bulk   IRS2104 ─ Q1 Q2 ─ [M+]                  │  ← mép công suất
  │   Q5          4,7µF×4  shunt═╗          4,7µF×2                          │
- │  (ngược cực)  ← GND sao      ║ Kelvin  EG2104B ─ Q3 Q4 ─ [M−]  NTC buck boost│ 40 mm
+ │  (ngược cực)  ← GND sao      ║ Kelvin  IRS2104 ─ Q3 Q4 ─ [M−]  NTC buck boost│ 40 mm
  │ ·························· ║ (L3, kẹp dưới L2 GND) ························│
  │ [USB-C] ESD   R30/C25/R69 ─ STM32G431 LQFP48  (XTAL DNP)  Q8  LDO   ESD   │
  │ ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ●  pad 2,54      │  ← mép tín hiệu
@@ -359,7 +362,7 @@ Như F1 V2 mục 12, với các thay đổi/bổ sung:
 
 ## 13. Rủi ro
 
-Giữ R1–R9 của F1 V2 (nhiệt, pad tản nhiệt, EG2104 V_IH, ngắn mạch M± xuống GND, nhiễu, USB không cách ly, reset do nhiễu, gai VM, tụ bulk). Bỏ R10 (thay chip tương đương), R11 (CPU), R12 (I2C F103), R3b (CCER). Thêm:
+Giữ R1–R9 của F1 V2 (nhiệt, pad tản nhiệt, V_IH gate driver — đã giảm nhờ IRS2104S có V_IH 2,5 V xác nhận, ngắn mạch M± xuống GND, nhiễu, USB không cách ly, reset do nhiễu, gai VM, tụ bulk). Bỏ R10 (thay chip tương đương), R11 (CPU), R12 (I2C F103), R3b (CCER). Thêm:
 
 | # | Rủi ro | Biểu hiện | Cách phòng |
 | --- | --- | --- | --- |
@@ -386,9 +389,9 @@ Giữ R1–R9 của F1 V2 (nhiệt, pad tản nhiệt, EG2104 V_IH, ngắn mạc
 
 ## Phụ lục A — BOM dự kiến (đã gom mã linh kiện)
 
-**29 mã**, ~**159 linh kiện**. RefDes giữ theo F1 V2 khi cùng chức năng; linh kiện bỏ đi để trống số; linh kiện mới đánh từ số tiếp theo. Mọi điện trở 0603 1 %, mọi tụ ceramic nhỏ 0603 50 V (trừ ghi khác).
+**28 mã**, ~**156 linh kiện**. RefDes giữ theo F1 V2 khi cùng chức năng; linh kiện bỏ đi để trống số; linh kiện mới đánh từ số tiếp theo. Mọi điện trở 0603 1 %, mọi tụ ceramic nhỏ 0603 50 V (trừ ghi khác).
 
-### A0. Bảng mã linh kiện hợp nhất (29 mã)
+### A0. Bảng mã linh kiện hợp nhất (28 mã)
 
 | Mã | Linh kiện | Gói | SL | Dùng ở |
 | --- | --- | --- | --- | --- |
@@ -399,19 +402,19 @@ Giữ R1–R9 của F1 V2 (nhiệt, pad tản nhiệt, EG2104 V_IH, ngắn mạc
 | M05 | Shunt 2 mΩ 1 % 3 W, TCR ≤ 100 ppm | 2512 | 1 | Đo dòng |
 | M06 | Tụ 100 pF 50 V C0G | 0603 | 10 | Lọc PB0, ENA, encoder ×2, STEP/DIR ×2, IO ×4 |
 | M07 | Tụ 100 nF 50 V X7R | 0603 | 15 | Tách nguồn IC, VM nửa cầu, BST buck, NRST, AIN, đo VM, VREF+ |
-| M08 | Tụ 1 µF 50 V X7R | 0603 | 10 | Bootstrap, VCC EG2104, LDO, VDDA, VREF+ |
-| M09 | Tụ 10 µF 25 V X5R | 0805 | 8 | Boost, lọc 12VG, buck, bulk 5 V, bulk 3V3 |
+| ~~M08~~ | ~~Tụ 1 µF~~ — **bỏ, gộp vào M09** | | 0 | |
+| M09 | Tụ 10 µF 25 V X5R | 0805 | 16 | Boost, lọc 12VG, buck, bulk 5 V, bulk 3V3, bootstrap ×2, VCC gate driver ×2, LDO ×2, VDDA, VREF+ |
 | M10 | Tụ 4,7 µF 50 V X7R | 1210 | 6 | Commutation ×4, lọc π buck ×2 |
 | M11 | Tụ điện phân 220 µF 50 V 105 °C low-ESR/polymer | SMD 10 × 10,5 | 3 | Bulk VM |
-| M12 | N-MOSFET 60 V, R_DS max ≤ 1,6 mΩ @10 V (tham chiếu TPH1R306PL) | PDFN 5×6 | 5 | Q1–Q4, Q5 |
+| M12 | **Infineon BSC014N06NS** (LCSC C113391): N-MOSFET 60 V, R_DS max 1,45 mΩ @10 V | PG-TDSON-8 (5×6) | 5 | Q1–Q4, Q5 |
 | M13 | AO3400 | SOT-23 | 1 | Q8 |
 | M14 | 1N4148W | SOD-123 | 6 | Bootstrap ×2, tắt nhanh gate ×4 |
-| M15 | Schottky SS36 | SMA | 4 | Boost, buck, OR nguồn 5 V ×2 |
+| M15 | Schottky SS36 | SMA | 3 | Boost, OR nguồn 5 V ×2 |
 | M16 | TVS SMCJ26A | SMC | 1 | VM |
 | M17 | LED xanh lá | 0603 | 2 | PWR, STATUS |
-| M18 | **EG2104S** (V_IH ≤ 2,5 V — kiểm) | SOP-8 | 2 | Gate driver |
+| M18 | **Infineon IRS2104STRPBF** (V_IH 2,5 V min; dự phòng NCP5104DR2G) | SOIC-8 | 2 | Gate driver |
 | M19 | **MT3608** | SOT-23-6 | 1 | Boost 12VG |
-| M20 | **MP2459GJ** (nguồn 2: MSKSEMI MP2459GJ-Z-MS) | TSOT23-6 | 1 | Buck 5 V |
+| M20 | **LMR51606XDBVR** (TI, LCSC C21260865; dự phòng SCT2601TVBR) | SOT-23-6 | 1 | Buck 5 V đồng bộ, 4–65 V |
 | M21 | **AP2112K-3.3** | SOT-23-5 | 1 | LDO 3,3 V |
 | M22 | **STM32G431CBT6** | LQFP-48 | 1 | MCU |
 | M23 | **74LVC2G14** | SOT-23-6 | 1 | Schmitt encoder |
@@ -422,15 +425,15 @@ Giữ R1–R9 của F1 V2 (nhiệt, pad tản nhiệt, EG2104 V_IH, ngắn mạc
 | M28 | Nút nhấn SMD 3 × 4 mm | SMD | 3 | RST, BOOT0, USER |
 | M29 | USB-C 16P (USB 2.0) | SMD | 1 | Cổng USB |
 
-Bỏ so với F1 V2: INA181A1, TLV7011, CH340C, resonator 8 MHz → 33 − 4 = **29 mã**. Footprint thạch anh + 2 tụ trên PF0/PF1 là **DNP**, không tính.
+Bỏ so với F1 V2: INA181A1, TLV7011, CH340C, resonator 8 MHz, tụ 1 µF → 33 − 5 = **28 mã**. Footprint thạch anh + 2 tụ trên PF0/PF1 là **DNP**, không tính.
 
 ### A1. Nguồn vào & bảo vệ VM — như F1 V2 (Q5, R1, R2, D2, C1–C10, R3, R4)
 
 Đo VM → **PA4** (C10 100 nF tại PA4).
 
-### A2. Cầu H & gate driver — như F1 V2 (Q1–Q4, U1, U2, D3–D8, R5–R17, C11–C18, TH1)
+### A2. Cầu H & gate driver — như F1 V2 (Q1–Q4, U1, U2, D3–D8, R5–R17, C11, C13, C15–C18, TH1)
 
-R15, R16 kéo xuống **IN_A (PA8), IN_B (PA9)**. TH1 → **PA3**.
+R15, R16 kéo xuống **IN_A (PA8), IN_B (PA9)**. TH1 → **PA3**. Bootstrap: **C11, C13 = 10 µF/25 V 0805** (bỏ C12, C14); VCC gate driver: **C15, C16 = 10 µF/25 V 0805**. U1, U2 = IRS2104STRPBF; Q1–Q4 = BSC014N06NS.
 
 ### A3. Rail gate +12VG — như F1 V2 (U3, L1, D9, C19–C22, R18–R21)
 
@@ -448,9 +451,9 @@ R15, R16 kéo xuống **IN_A (PA8), IN_B (PA9)**. TH1 → **PA3**.
 
 Bỏ so với F1: U5 INA181, U6 TLV7011, C24, C26, C27, R31, R32, R33, R34, R35, C28, C29.
 
-### A6. Nguồn logic 5 V / 3,3 V — như F1 V2 (FB1, C30–C38, U7, D10–D12, L2, R36–R41, U8, LED1, FB4)
+### A6. Nguồn logic 5 V / 3,3 V — như F1 V2 (FB1, C30–C38, U7, D11, D12, L2, R36–R41, U8, LED1, FB4)
 
-FB4 cấp +5V cho encoder.
+FB4 cấp +5V cho encoder. **C36, C37 (vào/ra LDO) = 10 µF/25 V 0805.** **U7 = LMR51606XDBVR**, EN nối thẳng VIN; bỏ D10 (buck đồng bộ) và R74. FB giữ (10 k + 1 k + 1 k) / (1 k + 1 k) → 0,8 × 7 = 5,6 V trước Schottky OR (~5,2 V sau).
 
 ### A7. MCU
 
@@ -460,8 +463,8 @@ FB4 cấp +5V cho encoder.
 | Y1, C57, C58 | — | Thạch anh + 2 tụ tải | DNP | Footprint trên PF0/PF1, không lắp |
 | C39–C42 | M07 | 100 nF | 4 | VDD ×3 + VBAT (kiểm số chân VDD của gói) |
 | FB2 | M26 | Ferrite | 1 | VDDA |
-| C43, C44 | M08 + M07 | 1 µF + 100 nF | 2 | VDDA |
-| C59, C60 | M08 + M07 | 1 µF + 100 nF | 2 | VREF+ |
+| C43, C44 | M09 + M07 | 10 µF + 100 nF | 2 | VDDA |
+| C59, C60 | M09 + M07 | 10 µF + 100 nF | 2 | VREF+ |
 | R42 | M03 | 10 kΩ | 1 | PB8-BOOT0 kéo xuống |
 | C45 | M07 | 100 nF | 1 | NRST |
 | SW1–SW3 | M28 | Nút | 3 | RST, BOOT0 (lên 3V3 qua R44), USER (PC14) |
@@ -474,7 +477,7 @@ Bỏ so với F1: R43 (BOOT1), Y1 resonator.
 
 | Ref | Mã | Giá trị | SL | Ghi chú |
 | --- | --- | --- | --- | --- |
-| J1 | M29 | USB-C 16P | 1 | |
+| J5 | M29 | USB-C 16P | 1 | |
 | R46–R49 | M03 | 10 kΩ | 4 | 2 × 10 kΩ song song mỗi CC |
 | FB3 | M26 | Ferrite | 1 | VBUS |
 | U10 | M24 | SRV05-4 | 1 | ESD D+/D−, VDD → VBUS |
@@ -493,10 +496,10 @@ Như F1 V2 (R54, R55, C50, C51, R56, C52, R57–R64, C53–C56, U14, R65–R68, 
 | Nhóm | Số mã | SL |
 | --- | --- | --- |
 | Điện trở + shunt | 5 | 65 |
-| Tụ | 6 | 52 |
-| Bán dẫn rời (MOSFET, AO3400, diode, TVS, LED) | 6 | 19 |
+| Tụ | 5 | 50 |
+| Bán dẫn rời (MOSFET, AO3400, diode, TVS, LED) | 6 | 18 |
 | IC | 7 | 12 |
 | Cuộn, ferrite, NTC, nút, USB-C | 5 | 11 |
-| **Tổng** | **29** | **~159** |
+| **Tổng** | **28** | **~156** |
 
-Mã chắc chắn Extended ở JLCPCB: MOSFET, EG2104, MT3608, MP2459, STM32G431CBT6, 74LVC2G14, SRV05-4, tụ 220 µF, shunt 3 W (F1: 12 mã → G4: 9 mã). Kiểm lại từng mã khi lên BOM thật.
+Mã chắc chắn Extended ở JLCPCB: MOSFET, IRS2104S, MT3608, LMR51606, STM32G431CBT6, 74LVC2G14, SRV05-4, tụ 220 µF, shunt 3 W (F1: 12 mã → G4: 9 mã). Kiểm lại từng mã khi lên BOM thật.
