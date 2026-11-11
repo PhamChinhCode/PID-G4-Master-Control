@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "PID_G4")(type "KiCad")(uri "${KIPRJMOD}/PID_G4.pretty")(options "")(descr "Project footprints for G4_PID_Driver_V1"))
+)
